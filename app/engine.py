@@ -1,13 +1,10 @@
-from typing import List, Optional
-
 from .models import (
     WTMConversationInput,
+    WTMEvidence,
     WTMFormInput,
     WTMOutput,
-    WTMQuestion,
-    WTMQuestionType,
-    WTMTraceability,
 )
+from .questions import WTMQuestionManager
 
 
 class WTMEngine:
@@ -17,12 +14,16 @@ class WTMEngine:
     WTM tiene como función:
     1. Recibir información inicial.
     2. Organizar la información disponible.
-    3. Detectar información faltante.
-    4. Generar preguntas de aclaración.
-    5. Preparar un resultado estructurado para BINAH.
+    3. Registrar evidencia aportada por el usuario.
+    4. Detectar información faltante.
+    5. Generar preguntas de aclaración.
+    6. Preparar el caso para las siguientes etapas de WTM.
 
     WTM no realiza el diagnóstico final de BINAH.
     """
+
+    def __init__(self) -> None:
+        self.question_manager = WTMQuestionManager()
 
     def create_initial_output(
         self,
@@ -32,12 +33,6 @@ class WTMEngine:
         Crea el estado inicial de WTM a partir del formulario.
         """
 
-        situation = (
-            form_input.description
-            or form_input.context
-            or None
-        )
-
         output = WTMOutput(
             methodology="WTM",
             version="0.1",
@@ -45,8 +40,28 @@ class WTMEngine:
             business=form_input.business,
             context=form_input.context,
             objective=form_input.objective,
-            situation=situation,
+            situation=form_input.description,
         )
+
+        for index, evidence in enumerate(
+            form_input.evidence,
+            start=1,
+        ):
+            evidence_id = self._next_id("E", index)
+
+            output.evidence.append(
+                WTMEvidence(
+                    id=evidence_id,
+                    content=evidence,
+                    type="USER_STATEMENT",
+                    source="form",
+                    status="PROVISIONAL",
+                )
+            )
+
+            output.traceability.source_evidence_ids.append(
+                evidence_id
+            )
 
         return self._update_questions(output)
 
@@ -58,9 +73,11 @@ class WTMEngine:
         """
         Incorpora un mensaje de conversación al proceso WTM.
 
-        En esta primera versión el motor no interpreta semánticamente
-        el mensaje mediante un modelo de IA. Conserva el mensaje como
-        evidencia y actualiza el estado del proceso.
+        En esta versión el motor no interpreta semánticamente
+        el mensaje mediante un modelo de IA.
+
+        El mensaje se conserva como evidencia provisional
+        para que las siguientes capas puedan procesarlo.
         """
 
         message = conversation_input.message.strip()
@@ -73,21 +90,20 @@ class WTMEngine:
             len(output.evidence) + 1,
         )
 
+        source = (
+            f"conversation:{conversation_input.conversation_id}"
+            if conversation_input.conversation_id
+            else "conversation"
+        )
+
         output.evidence.append(
-            {
-                "id": evidence_id,
-                "content": message,
-                "type": "USER_STATEMENT",
-                "source": (
-                    f"conversation:"
-                    f"{conversation_input.conversation_id}"
-                    if conversation_input.conversation_id
-                    else "conversation"
-                ),
-                "status": "PROVISIONAL",
-                "supports": [],
-                "contradicts": [],
-            }
+            WTMEvidence(
+                id=evidence_id,
+                content=message,
+                type="USER_STATEMENT",
+                source=source,
+                status="PROVISIONAL",
+            )
         )
 
         output.traceability.source_evidence_ids.append(
@@ -103,46 +119,23 @@ class WTMEngine:
         output: WTMOutput,
     ) -> WTMOutput:
         """
-        Determina las preguntas básicas que todavía pueden bloquear
-        la preparación del caso para BINAH.
+        Actualiza las preguntas estructurales pendientes.
+
+        La construcción de preguntas pertenece a
+        WTMQuestionManager.
         """
 
-        questions: List[WTMQuestion] = []
-
-        if not output.context:
-            questions.append(
-                self._question(
-                    "context",
-                    "¿En qué contexto ocurre la situación que quieres analizar?",
-                    "MISSING_INFORMATION",
-                    "context",
-                )
-            )
-
-        if not output.objective:
-            questions.append(
-                self._question(
-                    "objective",
-                    "¿Qué quieres lograr o cambiar con respecto a esta situación?",
-                    "OBJECTIVE",
-                    "objective",
-                )
-            )
-
-        if not output.situation:
-            questions.append(
-                self._question(
-                    "situation",
-                    "¿Qué está ocurriendo actualmente y por qué consideras que necesita atención?",
-                    "CLARIFICATION",
-                    "situation",
-                )
-            )
+        questions = self.question_manager.build_basic_questions(
+            context=bool(output.context),
+            objective=bool(output.objective),
+            situation=bool(output.situation),
+        )
 
         output.questions = questions
 
         output.traceability.question_ids = [
-            question.id for question in questions
+            question.id
+            for question in questions
         ]
 
         if questions:
@@ -154,31 +147,13 @@ class WTMEngine:
                 if question.required
             ]
         else:
-            output.status = "READY_FOR_BINAH"
-            output.ready_for_binah = True
-            output.blocking_reasons = []
+            output.status = "VERIFYING"
+            output.ready_for_binah = False
+            output.blocking_reasons = [
+                "El caso requiere verificación antes de ser enviado a BINAH."
+            ]
 
         return output
-
-    def _question(
-        self,
-        question_id: str,
-        text: str,
-        question_type: str,
-        target: str,
-    ) -> WTMQuestion:
-        """
-        Construye una pregunta WTM normalizada.
-        """
-
-        return WTMQuestion(
-            id=f"Q_{question_id}",
-            text=text,
-            type=question_type,
-            target=target,
-            required=True,
-            answered=False,
-        )
 
     @staticmethod
     def _next_id(
