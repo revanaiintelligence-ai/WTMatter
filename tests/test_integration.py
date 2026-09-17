@@ -64,6 +64,7 @@ def test_wtm_full_flow_to_binah():
             message,
         )
 
+    output = engine._update_questions(output)
     output = traceability.rebuild(output)
     output = validation.validate(output)
 
