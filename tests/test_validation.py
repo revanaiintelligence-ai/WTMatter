@@ -1,4 +1,4 @@
-from app.models import WTMOutput
+from app.models import WTMContradiction, WTMOutput
 from app.validation import WTMValidationEngine
 
 
@@ -55,13 +55,13 @@ def test_validation_blocks_unresolved_contradiction():
     )
 
     output.contradictions.append(
-        {
-            "id": "C_001",
-            "statement_a": "La respuesta es rápida.",
-            "statement_b": "La respuesta es lenta.",
-            "source_ids": [],
-            "resolved": False,
-        }
+        WTMContradiction(
+            id="C_001",
+            statement_a="La respuesta es rápida.",
+            statement_b="La respuesta es lenta.",
+            source_ids=[],
+            resolved=False,
+        )
     )
 
     updated = engine.validate(output)
