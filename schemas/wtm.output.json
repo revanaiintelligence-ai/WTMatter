@@ -62,27 +62,49 @@
       ]
     },
     "observations": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/observation"
+      }
     },
     "hypotheses": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/hypothesis"
+      }
     },
     "unknowns": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unknown"
+      }
     },
     "contradictions": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/contradiction"
+      }
     },
     "evidence": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
     },
     "questions": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/question"
+      }
     },
     "need_candidate": {
-      "type": [
-        "object",
-        "null"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/needCandidate"
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "conversation_summary": {
@@ -98,6 +120,326 @@
       "type": "array",
       "items": {
         "type": "string"
+      }
+    },
+    "traceability": {
+      "$ref": "#/$defs/traceability"
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "required": [
+        "id",
+        "content",
+        "type",
+        "source",
+        "status",
+        "supports",
+        "contradicts"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "FACT",
+            "OBSERVATION",
+            "USER_STATEMENT",
+            "DOCUMENT",
+            "METRIC",
+            "RECORD",
+            "OTHER"
+          ]
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "PROVISIONAL",
+            "SUPPORTED",
+            "CONTRADICTED",
+            "VERIFIED"
+          ]
+        },
+        "supports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contradicts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement",
+        "source_evidence_ids",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "source_evidence_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "PROVISIONAL",
+            "SUPPORTED",
+            "CONTRADICTED",
+            "VERIFIED"
+          ]
+        }
+      }
+    },
+    "hypothesis": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement",
+        "basis_ids",
+        "status",
+        "verification_required"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "basis_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "UNKNOWN",
+            "PROVISIONAL",
+            "SUPPORTED",
+            "CONTRADICTED",
+            "VERIFIED"
+          ]
+        },
+        "verification_required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "unknown": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement",
+        "importance",
+        "blocks_binah"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "statement": {
+          "type": "string"
+        },
+        "importance": {
+          "type": "string",
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH",
+            "CRITICAL"
+          ]
+        },
+        "blocks_binah": {
+          "type": "boolean"
+        }
+      }
+    },
+    "contradiction": {
+      "type": "object",
+      "required": [
+        "id",
+        "statement_a",
+        "statement_b",
+        "source_ids",
+        "resolved",
+        "resolution"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "statement_a": {
+          "type": "string"
+        },
+        "statement_b": {
+          "type": "string"
+        },
+        "source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resolved": {
+          "type": "boolean"
+        },
+        "resolution": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "question": {
+      "type": "object",
+      "required": [
+        "id",
+        "text",
+        "type",
+        "target",
+        "required",
+        "answered"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "CLARIFICATION",
+            "VERIFICATION",
+            "SPECIFICATION",
+            "CONTRADICTION",
+            "MISSING_INFORMATION",
+            "SCOPE",
+            "OBJECTIVE"
+          ]
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "answered": {
+          "type": "boolean"
+        }
+      }
+    },
+    "needCandidate": {
+      "type": "object",
+      "required": [
+        "statement",
+        "type",
+        "area",
+        "function",
+        "process",
+        "activity",
+        "task",
+        "actor",
+        "basis_ids",
+        "confidence_status"
+      ],
+      "properties": {
+        "statement": {
+          "type": "string"
+        },
+        "type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "area": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "function": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "process": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "activity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "task": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "actor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "basis_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confidence_status": {
+          "type": "string",
+          "enum": [
+            "PROVISIONAL",
+            "SUPPORTED",
+            "VERIFIED"
+          ]
+        }
       }
     },
     "traceability": {
