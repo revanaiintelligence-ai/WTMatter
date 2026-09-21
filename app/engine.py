@@ -67,8 +67,8 @@ class WTMEngine:
         Registra un mensaje de conversación como evidencia.
 
         La recepción de un nuevo mensaje mantiene el caso
-        en estado CLARIFYING. La validación posterior determina
-        si el caso puede pasar a READY_FOR_BINAH.
+        en estado CLARIFYING. La actualización posterior de
+        preguntas y la validación determinan el estado final.
         """
 
         evidence_id = self._next_id(
@@ -93,7 +93,6 @@ class WTMEngine:
 
         output.traceability.source_evidence_ids.append(evidence_id)
 
-        # Un nuevo mensaje pertenece al proceso de clarificación.
         output.status = "CLARIFYING"
 
         return output
@@ -101,7 +100,7 @@ class WTMEngine:
     def _update_questions(
         self,
         output: WTMOutput,
-    ) -> None:
+    ) -> WTMOutput:
         """
         Actualiza las preguntas básicas pendientes.
 
@@ -134,6 +133,8 @@ class WTMEngine:
             output.blocking_reasons = [
                 "El caso requiere verificación antes de ser enviado a BINAH."
             ]
+
+        return output
 
     @staticmethod
     def _next_id(
