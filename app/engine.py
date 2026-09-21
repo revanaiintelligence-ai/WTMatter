@@ -1,28 +1,27 @@
-from .models import (
+from app.models import (
     WTMConversationInput,
     WTMEvidence,
     WTMFormInput,
     WTMOutput,
 )
-from .questions import WTMQuestionManager
+from app.questions import WTMQuestionManager
 
 
 class WTMEngine:
     """
     Motor principal de WTM.
 
-    WTM tiene como función:
-    1. Recibir información inicial.
-    2. Organizar la información disponible.
-    3. Registrar evidencia aportada por el usuario.
-    4. Detectar información faltante.
-    5. Generar preguntas de aclaración.
-    6. Preparar el caso para las siguientes etapas de WTM.
+    Responsabilidades:
+    - Crear el estado inicial desde el formulario.
+    - Registrar mensajes de conversación como evidencia.
+    - Mantener el estado de clarificación.
+    - Actualizar las preguntas pendientes.
 
-    WTM no realiza el diagnóstico final de BINAH.
+    WTM no diagnostica ni resuelve el caso.
+    Su función es preparar información estructurada para BINAH.
     """
 
-    def __init__(self) -> None:
+    def __init__(self):
         self.question_manager = WTMQuestionManager()
 
     def create_initial_output(
@@ -30,23 +29,17 @@ class WTMEngine:
         form_input: WTMFormInput,
     ) -> WTMOutput:
         """
-        Crea el estado inicial de WTM a partir del formulario.
+        Crea el WTMOutput inicial a partir del formulario.
         """
 
         output = WTMOutput(
-            methodology="WTM",
-            version="0.1",
-            status="COLLECTING",
             business=form_input.business,
             context=form_input.context,
             objective=form_input.objective,
             situation=form_input.description,
         )
 
-        for index, evidence in enumerate(
-            form_input.evidence,
-            start=1,
-        ):
+        for index, evidence in enumerate(form_input.evidence, start=1):
             evidence_id = self._next_id("E", index)
 
             output.evidence.append(
@@ -59,70 +52,64 @@ class WTMEngine:
                 )
             )
 
-            output.traceability.source_evidence_ids.append(
-                evidence_id
-            )
+            output.traceability.source_evidence_ids.append(evidence_id)
 
-        return self._update_questions(output)
+        self._update_questions(output)
+
+        return output
 
     def process_message(
         self,
         output: WTMOutput,
-        conversation_input: WTMConversationInput,
+        conversation: WTMConversationInput,
     ) -> WTMOutput:
         """
-        Incorpora un mensaje de conversación al proceso WTM.
+        Registra un mensaje de conversación como evidencia.
 
-        En esta versión el motor no interpreta semánticamente
-        el mensaje mediante un modelo de IA.
-
-        El mensaje se conserva como evidencia provisional
-        para que las siguientes capas puedan procesarlo.
+        La recepción de un nuevo mensaje mantiene el caso
+        en estado CLARIFYING. La validación posterior determina
+        si el caso puede pasar a READY_FOR_BINAH.
         """
-
-        message = conversation_input.message.strip()
-
-        if not message:
-            return output
 
         evidence_id = self._next_id(
             "E",
             len(output.evidence) + 1,
         )
 
-        source = (
-            f"conversation:{conversation_input.conversation_id}"
-            if conversation_input.conversation_id
-            else "conversation"
-        )
+        source = "conversation"
+
+        if conversation.conversation_id:
+            source = f"conversation:{conversation.conversation_id}"
 
         output.evidence.append(
             WTMEvidence(
                 id=evidence_id,
-                content=message,
+                content=conversation.message,
                 type="USER_STATEMENT",
                 source=source,
                 status="PROVISIONAL",
             )
         )
 
-        output.traceability.source_evidence_ids.append(
-            evidence_id
-        )
+        output.traceability.source_evidence_ids.append(evidence_id)
 
+        # Un nuevo mensaje pertenece al proceso de clarificación.
         output.status = "CLARIFYING"
 
-        return self._update_questions(output)
+        return output
 
     def _update_questions(
         self,
         output: WTMOutput,
-    ) -> WTMOutput:
+    ) -> None:
         """
-        Actualiza las preguntas estructurales pendientes.
+        Actualiza las preguntas básicas pendientes.
 
-        La construcción de preguntas pertenece a
-        WTMQuestionManager.
+        Si faltan elementos fundamentales, el caso permanece
+        en CLARIFYING.
+
+        Si ya están presentes, pasa a VERIFYING.
+        La validación posterior determina READY_FOR_BINAH.
         """
 
         questions = self.question_manager.build_basic_questions(
@@ -132,11 +119,6 @@ class WTMEngine:
         )
 
         output.questions = questions
-
-        output.traceability.question_ids = [
-            question.id
-            for question in questions
-        ]
 
         if questions:
             output.status = "CLARIFYING"
@@ -153,15 +135,13 @@ class WTMEngine:
                 "El caso requiere verificación antes de ser enviado a BINAH."
             ]
 
-        return output
-
     @staticmethod
     def _next_id(
         prefix: str,
         number: int,
     ) -> str:
         """
-        Genera identificadores simples y trazables.
+        Genera identificadores secuenciales.
         """
 
         return f"{prefix}_{number:03d}"
