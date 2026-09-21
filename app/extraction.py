@@ -1,148 +1,119 @@
-from typing import List, Optional
+import re
 
-from .models import (
-    WTMConversationInput,
-    WTMOutput,
-)
+from app.models import WTMConversationInput, WTMOutput
 
 
 class WTMExtractionEngine:
     """
-    Motor de extracción de información de WTM.
+    Motor de extracción conservadora de WTM.
 
-    Su función es identificar información explícita
-    proporcionada por el usuario y actualizar el estado
-    estructurado de WTM.
+    Solo extrae información cuando el usuario utiliza
+    explícitamente un marcador reconocido.
 
-    No realiza diagnóstico de BINAH.
-    No determina la solución del problema.
+    WTM no inventa, interpreta ni diagnostica información.
     """
+
+    CONTEXT_MARKERS = (
+        "contexto",
+        "context",
+    )
+
+    OBJECTIVE_MARKERS = (
+        "objetivo",
+        "objective",
+        "quiero lograr",
+    )
+
+    SITUATION_MARKERS = (
+        "situación",
+        "situacion",
+        "situation",
+    )
 
     def extract(
         self,
         output: WTMOutput,
-        conversation_input: WTMConversationInput,
+        conversation: WTMConversationInput,
     ) -> WTMOutput:
         """
-        Procesa un mensaje y actualiza información explícita
-        cuando puede asignarse de forma segura a un campo WTM.
+        Extrae únicamente información declarada mediante
+        marcadores explícitos.
         """
 
-        message = conversation_input.message.strip()
+        message = conversation.message.strip()
 
-        if not message:
-            return output
+        context = self._extract_context(message)
+        objective = self._extract_objective(message)
+        situation = self._extract_situation(message)
 
-        self._extract_context(output, message)
-        self._extract_objective(output, message)
-        self._extract_situation(output, message)
+        if context is not None:
+            output.context = context
+
+        if objective is not None:
+            output.objective = objective
+
+        if situation is not None:
+            output.situation = situation
 
         return output
 
-    @staticmethod
     def _extract_context(
-        output: WTMOutput,
+        self,
         message: str,
-    ) -> None:
-        """
-        Extrae contexto solamente cuando WTM ya dispone
-        de una indicación explícita.
-        """
-
-        if output.context:
-            return
-
-        context = WTMExtractionEngine._find_after_marker(
+    ) -> str | None:
+        return self._find_after_marker(
             message,
-            [
-                "contexto:",
-                "contexto",
-            ],
+            self.CONTEXT_MARKERS,
         )
 
-        if context:
-            output.context = context
-
-    @staticmethod
     def _extract_objective(
-        output: WTMOutput,
+        self,
         message: str,
-    ) -> None:
-        """
-        Extrae el objetivo cuando aparece explícitamente.
-        """
-
-        if output.objective:
-            return
-
-        objective = WTMExtractionEngine._find_after_marker(
+    ) -> str | None:
+        return self._find_after_marker(
             message,
-            [
-                "objetivo:",
-                "objetivo",
-                "quiero lograr:",
-                "quiero lograr",
-            ],
+            self.OBJECTIVE_MARKERS,
         )
 
-        if objective:
-            output.objective = objective
-
-    @staticmethod
     def _extract_situation(
-        output: WTMOutput,
+        self,
         message: str,
-    ) -> None:
-        """
-        Extrae la situación cuando aparece explícitamente.
-        """
-
-        if output.situation:
-            return
-
-        situation = WTMExtractionEngine._find_after_marker(
+    ) -> str | None:
+        return self._find_after_marker(
             message,
-            [
-                "situación:",
-                "situación",
-                "problema:",
-                "problema",
-            ],
+            self.SITUATION_MARKERS,
         )
-
-        if situation:
-            output.situation = situation
 
     @staticmethod
     def _find_after_marker(
         message: str,
-        markers: List[str],
-    ) -> Optional[str]:
+        markers: tuple[str, ...],
+    ) -> str | None:
         """
-        Busca una expresión explícita y devuelve el contenido
-        posterior a ella.
+        Busca un marcador solamente cuando aparece como
+        una expresión independiente y no como parte de otra
+        palabra.
 
-        La extracción es deliberadamente conservadora:
-        si no existe un marcador claro, no inventa información.
+        Ejemplo válido:
+            "situación: los clientes esperan demasiado"
+
+        Ejemplo no válido:
+            "Tenemos algunos problemas con el proceso."
         """
-
-        normalized_message = message.strip()
-        message_lower = normalized_message.lower()
 
         for marker in markers:
-            marker_lower = marker.lower()
+            pattern = rf"(?<!\w){re.escape(marker)}(?!\w)\s*:?"
 
-            position = message_lower.find(marker_lower)
+            match = re.search(
+                pattern,
+                message,
+                flags=re.IGNORECASE,
+            )
 
-            if position == -1:
+            if match is None:
                 continue
 
-            value = normalized_message[
-                position + len(marker_lower):
-            ].strip()
-
-            if value.startswith(":"):
-                value = value[1:].strip()
+            value = message[match.end():].strip()
 
             if value:
                 return value
