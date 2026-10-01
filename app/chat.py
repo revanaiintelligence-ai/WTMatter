@@ -3,109 +3,144 @@ from .extraction import WTMExtractionEngine
 from .models import WTMConversationInput, WTMFormInput, WTMOutput
 from .validation import WTMValidationEngine
 
-
 class WTMChat:
+"""
+Capa conversacional de WTM.
+
+Conecta la conversación del usuario con los componentes
+estructurales de WTM.
+
+WTMChat no realiza el diagnóstico de BINAH.
+Su función es conducir el descubrimiento y preparar
+el caso para BINAH.
+"""
+
+def __init__(self) -> None:
+    self.engine = WTMEngine()
+    self.extraction = WTMExtractionEngine()
+    self.validation = WTMValidationEngine()
+
+def start(
+    self,
+    form_input: WTMFormInput,
+) -> WTMOutput:
     """
-    Capa conversacional de WTM.
+    Inicia una sesión WTM a partir del formulario.
 
-    Conecta la conversación del usuario con los componentes
-    estructurales de WTM.
-
-    WTMChat no realiza el diagnóstico de BINAH.
-    Su función es conducir el descubrimiento y preparar
-    el caso para BINAH.
+    Se mantiene para compatibilidad con integraciones
+    que todavía utilizan el flujo basado en formulario.
     """
 
-    def __init__(self) -> None:
-        self.engine = WTMEngine()
-        self.extraction = WTMExtractionEngine()
-        self.validation = WTMValidationEngine()
+    output = self.engine.create_initial_output(
+        form_input
+    )
 
-    def start(
-        self,
-        form_input: WTMFormInput,
-    ) -> WTMOutput:
-        """
-        Inicia una sesión WTM a partir del formulario inicial.
-        """
+    return self._refresh(output)
 
-        output = self.engine.create_initial_output(
-            form_input
-        )
+def start_conversation(
+    self,
+    message: str,
+    business: str = "Por determinar",
+    conversation_id: str | None = None,
+    turn: int | None = 1,
+) -> WTMOutput:
+    """
+    Inicia WTM directamente desde una conversación.
 
-        return self._refresh(output)
+    El usuario no necesita conocer ni completar la estructura
+    interna de WTM. El primer mensaje entra como conversación
+    y el caso se estructura progresivamente a partir de ella.
 
-    def receive_message(
-        self,
-        output: WTMOutput,
-        message: str,
-        conversation_id: str | None = None,
-        turn: int | None = None,
-    ) -> WTMOutput:
-        """
-        Recibe un mensaje del usuario y actualiza el estado WTM.
-        """
+    El método start se conserva para compatibilidad con
+    integraciones que todavía utilizan el formulario.
+    """
 
-        conversation_input = WTMConversationInput(
-            message=message,
-            conversation_id=conversation_id,
-            turn=turn,
-        )
+    form_input = WTMFormInput(
+        business=business,
+    )
 
-        output = self.engine.process_message(
-            output,
-            conversation_input,
-        )
+    output = self.engine.create_initial_output(
+        form_input
+    )
 
-        output = self.extraction.extract(
-            output,
-            conversation_input,
-        )
+    return self.receive_message(
+        output,
+        message,
+        conversation_id=conversation_id,
+        turn=turn,
+    )
 
-        return self._refresh(output)
+def receive_message(
+    self,
+    output: WTMOutput,
+    message: str,
+    conversation_id: str | None = None,
+    turn: int | None = None,
+) -> WTMOutput:
+    """
+    Recibe un mensaje del usuario y actualiza el estado WTM.
+    """
 
-    def get_next_question(
-        self,
-        output: WTMOutput,
-    ) -> str | None:
-        """
-        Devuelve la siguiente pregunta pendiente.
+    conversation_input = WTMConversationInput(
+        message=message,
+        conversation_id=conversation_id,
+        turn=turn,
+    )
 
-        Si no existen preguntas pendientes, devuelve None.
-        """
+    output = self.engine.process_message(
+        output,
+        conversation_input,
+    )
 
-        if not output.questions:
-            return None
+    output = self.extraction.extract(
+        output,
+        conversation_input,
+    )
 
-        for question in output.questions:
-            if question.required and not question.answered:
-                return question.text
+    return self._refresh(output)
 
+def get_next_question(
+    self,
+    output: WTMOutput,
+) -> str | None:
+    """
+    Devuelve la siguiente pregunta pendiente.
+
+    Si no existen preguntas pendientes, devuelve None.
+    """
+
+    if not output.questions:
         return None
 
-    def is_ready_for_binah(
-        self,
-        output: WTMOutput,
-    ) -> bool:
-        """
-        Indica si el caso está listo para continuar hacia BINAH.
-        """
+    for question in output.questions:
+        if question.required and not question.answered:
+            return question.text
 
-        return output.ready_for_binah
+    return None
 
-    def _refresh(
-        self,
-        output: WTMOutput,
-    ) -> WTMOutput:
-        """
-        Actualiza preguntas y valida el estado actual.
+def is_ready_for_binah(
+    self,
+    output: WTMOutput,
+) -> bool:
+    """
+    Indica si el caso está listo para continuar hacia BINAH.
+    """
 
-        La extracción ocurre antes de esta etapa para que
-        las preguntas reflejen la información recién obtenida.
-        """
+    return output.ready_for_binah
 
-        output = self.engine._update_questions(output)
+def _refresh(
+    self,
+    output: WTMOutput,
+) -> WTMOutput:
+    """
+    Actualiza preguntas y valida el estado actual.
 
-        output = self.validation.validate(output)
+    La extracción ocurre antes de esta etapa para que
+    las preguntas reflejen la información recién obtenida.
+    """
 
-        return output
+    output = self.engine._update_questions(output)
+
+    output = self.validation.validate(output)
+
+    return output
